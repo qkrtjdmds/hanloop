@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { activityTypes } from "@/data/seed";
 import { calculateEmission } from "@/lib/carbon";
@@ -22,6 +22,8 @@ interface ActivityFormValues {
 
 type ActivityFormErrors = Partial<Record<keyof ActivityFormValues, string>>;
 
+const scopeOptions: Scope[] = ["scope1", "scope2", "scope3"];
+
 const initialValues: ActivityFormValues = {
   date: "",
   companyId: "",
@@ -33,8 +35,6 @@ const initialValues: ActivityFormValues = {
   emissionFactor: "",
   scope: "",
 };
-
-const scopeOptions: Scope[] = ["scope1", "scope2", "scope3"];
 
 function formatKgCo2e(value: number): string {
   return `${value.toLocaleString(undefined, {
@@ -51,6 +51,18 @@ function isNumericValue(value: string): boolean {
   return Number.isFinite(Number(value));
 }
 
+function sanitizeNumericInput(value: string): string {
+  if (!value) {
+    return "";
+  }
+
+  if (value === "-" || value === "+") {
+    return "";
+  }
+
+  return value.startsWith("-") ? value.slice(1) : value;
+}
+
 export function ActivityForm() {
   const countries = useCarbonStore((state) => state.countries);
   const companies = useCarbonStore((state) => state.companies);
@@ -62,9 +74,21 @@ export function ActivityForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const defaultCompany = companies.length === 1 ? companies[0] : undefined;
+  const defaultCountry = countries.length === 1 ? countries[0] : undefined;
+
+  const normalizedValues = useMemo<ActivityFormValues>(() => {
+    return {
+      ...values,
+      companyId: values.companyId || defaultCompany?.id || "",
+      countryCode:
+        values.countryCode || defaultCompany?.countryCode || defaultCountry?.code || "",
+    };
+  }, [defaultCompany, defaultCountry, values]);
+
   const selectedActivityType = useMemo(
-    () => activityTypes.find((item) => item.id === values.activityType),
-    [values.activityType],
+    () => activityTypes.find((item) => item.id === normalizedValues.activityType),
+    [normalizedValues.activityType],
   );
 
   const unitOptions = useMemo(() => {
@@ -85,75 +109,12 @@ export function ActivityForm() {
     );
   }, [selectedActivityType]);
 
-  const matchedPreset = useMemo(() => {
-    if (!selectedActivityType) {
-      return undefined;
-    }
-
-    const normalizedDescription = values.description.trim();
-
-    return (
-      selectedActivityType.presets.find(
-        (preset) => preset.description === normalizedDescription,
-      ) ?? selectedActivityType.presets[0]
-    );
-  }, [selectedActivityType, values.description]);
-
-  useEffect(() => {
-    if (!values.companyId && companies.length === 1) {
-      setValues((current) => ({
-        ...current,
-        companyId: companies[0].id,
-        countryCode: companies[0].countryCode,
-      }));
-    }
-  }, [companies, values.companyId]);
-
-  useEffect(() => {
-    if (!values.countryCode && countries.length === 1) {
-      setValues((current) => ({
-        ...current,
-        countryCode: countries[0].code,
-      }));
-    }
-  }, [countries, values.countryCode]);
-
-  useEffect(() => {
-    if (!matchedPreset || !selectedActivityType) {
-      return;
-    }
-
-    setValues((current) => {
-      const nextDescription = current.description || selectedActivityType.defaultDescription;
-      const nextUnit = current.unit || matchedPreset.unit;
-      const nextEmissionFactor = current.emissionFactor || String(matchedPreset.emissionFactor);
-      const nextScope = current.scope || matchedPreset.scope;
-
-      if (
-        nextDescription === current.description &&
-        nextUnit === current.unit &&
-        nextEmissionFactor === current.emissionFactor &&
-        nextScope === current.scope
-      ) {
-        return current;
-      }
-
-      return {
-        ...current,
-        description: nextDescription,
-        unit: nextUnit,
-        emissionFactor: nextEmissionFactor,
-        scope: nextScope,
-      };
-    });
-  }, [matchedPreset, selectedActivityType]);
-
-  const amountNumber = Number(values.amount);
-  const emissionFactorNumber = Number(values.emissionFactor);
+  const amountNumber = Number(normalizedValues.amount);
+  const emissionFactorNumber = Number(normalizedValues.emissionFactor);
   const emissionPreview =
-    isNumericValue(values.amount) &&
+    isNumericValue(normalizedValues.amount) &&
     amountNumber > 0 &&
-    isNumericValue(values.emissionFactor) &&
+    isNumericValue(normalizedValues.emissionFactor) &&
     emissionFactorNumber > 0
       ? calculateEmission(amountNumber, emissionFactorNumber)
       : 0;
@@ -194,7 +155,7 @@ export function ActivityForm() {
     }
 
     if (!nextValues.emissionFactor.trim()) {
-      nextErrors.emissionFactor = "배출계수는 숫자로 입력해주세요.";
+      nextErrors.emissionFactor = "배출계수를 입력해주세요.";
     } else if (!isNumericValue(nextValues.emissionFactor)) {
       nextErrors.emissionFactor = "배출계수는 숫자로 입력해주세요.";
     } else if (Number(nextValues.emissionFactor) <= 0) {
@@ -202,10 +163,16 @@ export function ActivityForm() {
     }
 
     if (!nextValues.scope) {
-      nextErrors.scope = "배출 범위를 선택해주세요.";
+      nextErrors.scope = "Scope를 선택해주세요.";
     }
 
     return nextErrors;
+  }
+
+  function resetForm() {
+    setValues(initialValues);
+    setErrors({});
+    setSubmitError(null);
   }
 
   function updateField<K extends keyof ActivityFormValues>(key: K, value: ActivityFormValues[K]) {
@@ -226,7 +193,7 @@ export function ActivityForm() {
     setValues((current) => ({
       ...current,
       companyId,
-      countryCode: selectedCompany?.countryCode ?? "",
+      countryCode: selectedCompany?.countryCode ?? current.countryCode,
     }));
 
     setErrors((current) => ({
@@ -296,27 +263,17 @@ export function ActivityForm() {
     }
   }
 
-  function handleCancel() {
-    setValues({
-      ...initialValues,
-      companyId: companies.length === 1 ? companies[0].id : "",
-      countryCode: countries.length === 1 ? countries[0].code : "",
-    });
-    setErrors({});
-    setSubmitError(null);
-  }
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const nextErrors = validate(values);
+    const nextErrors = validate(normalizedValues);
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
       return;
     }
 
-    const { activityType, scope } = values;
+    const { activityType, scope } = normalizedValues;
 
     if (!activityType || !scope) {
       return;
@@ -327,14 +284,14 @@ export function ActivityForm() {
 
     try {
       const savedRecord = await saveActivityRecord({
-        companyId: values.companyId,
-        countryCode: values.countryCode,
-        date: values.date,
+        companyId: normalizedValues.companyId,
+        countryCode: normalizedValues.countryCode,
+        date: normalizedValues.date,
         activityType,
-        description: values.description.trim(),
-        amount: Number(values.amount),
-        unit: values.unit,
-        emissionFactor: Number(values.emissionFactor),
+        description: normalizedValues.description.trim(),
+        amount: Number(normalizedValues.amount),
+        unit: normalizedValues.unit,
+        emissionFactor: Number(normalizedValues.emissionFactor),
         scope,
       });
 
@@ -343,13 +300,7 @@ export function ActivityForm() {
         return;
       }
 
-      setValues({
-        ...initialValues,
-        companyId: companies.length === 1 ? companies[0].id : "",
-        countryCode: countries.length === 1 ? countries[0].code : "",
-      });
-      setErrors({});
-      setSubmitError(null);
+      resetForm();
     } finally {
       setIsSubmitting(false);
     }
@@ -365,13 +316,13 @@ export function ActivityForm() {
         </p>
       </div>
 
-      <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+      <form className="mt-6 space-y-5" onSubmit={handleSubmit} noValidate>
         <div className="grid gap-5 md:grid-cols-2">
           <label className="block">
             <span className="text-sm font-medium text-slate-700">일자</span>
             <input
               type="date"
-              value={values.date}
+              value={normalizedValues.date}
               onChange={(event) => updateField("date", event.target.value)}
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
             />
@@ -381,7 +332,7 @@ export function ActivityForm() {
           <label className="block">
             <span className="text-sm font-medium text-slate-700">기업</span>
             <select
-              value={values.companyId}
+              value={normalizedValues.companyId}
               onChange={(event) => handleCompanyChange(event.target.value)}
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
             >
@@ -398,7 +349,7 @@ export function ActivityForm() {
           <label className="block">
             <span className="text-sm font-medium text-slate-700">국가</span>
             <select
-              value={values.countryCode}
+              value={normalizedValues.countryCode}
               onChange={(event) => updateField("countryCode", event.target.value)}
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
             >
@@ -417,7 +368,7 @@ export function ActivityForm() {
           <label className="block">
             <span className="text-sm font-medium text-slate-700">활동 유형</span>
             <select
-              value={values.activityType}
+              value={normalizedValues.activityType}
               onChange={(event) =>
                 handleActivityTypeChange(event.target.value as ActivityType | "")
               }
@@ -439,7 +390,7 @@ export function ActivityForm() {
             <span className="text-sm font-medium text-slate-700">설명</span>
             <textarea
               rows={4}
-              value={values.description}
+              value={normalizedValues.description}
               onChange={(event) => handleDescriptionChange(event.target.value)}
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
               placeholder={
@@ -461,9 +412,12 @@ export function ActivityForm() {
           <label className="block">
             <span className="text-sm font-medium text-slate-700">량</span>
             <input
-              type="text"
-              value={values.amount}
-              onChange={(event) => updateField("amount", event.target.value)}
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={normalizedValues.amount}
+              onChange={(event) => updateField("amount", sanitizeNumericInput(event.target.value))}
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
               placeholder="숫자로 입력해주세요"
             />
@@ -473,7 +427,7 @@ export function ActivityForm() {
           <label className="block">
             <span className="text-sm font-medium text-slate-700">단위</span>
             <select
-              value={values.unit}
+              value={normalizedValues.unit}
               onChange={(event) => updateField("unit", event.target.value)}
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
             >
@@ -490,11 +444,16 @@ export function ActivityForm() {
           <label className="block">
             <span className="text-sm font-medium text-slate-700">배출계수</span>
             <input
-              type="text"
-              value={values.emissionFactor}
-              onChange={(event) => updateField("emissionFactor", event.target.value)}
+              type="number"
+              min="0"
+              step="0.001"
+              inputMode="decimal"
+              value={normalizedValues.emissionFactor}
+              onChange={(event) =>
+                updateField("emissionFactor", sanitizeNumericInput(event.target.value))
+              }
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
-              placeholder="숫자로 입력해주세요"
+              placeholder="배출계수를 입력해주세요"
             />
             {errors.emissionFactor ? (
               <p className="mt-2 text-sm text-rose-600">{errors.emissionFactor}</p>
@@ -504,11 +463,11 @@ export function ActivityForm() {
           <label className="block">
             <span className="text-sm font-medium text-slate-700">Scope</span>
             <select
-              value={values.scope}
+              value={normalizedValues.scope}
               onChange={(event) => updateField("scope", event.target.value as Scope | "")}
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
             >
-              <option value="">배출 범위를 선택해주세요</option>
+              <option value="">Scope를 선택해주세요</option>
               {scopeOptions.map((scope) => (
                 <option key={scope} value={scope}>
                   {getScopeLabel(scope)}
@@ -540,7 +499,7 @@ export function ActivityForm() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
-            onClick={handleCancel}
+            onClick={resetForm}
             className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             취소

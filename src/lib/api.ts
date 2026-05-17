@@ -17,9 +17,9 @@ const MIN_LATENCY_MS = 200;
 const MAX_LATENCY_MS = 800;
 const WRITE_FAILURE_RATE = 0.15;
 
-let countries: Country[] = seedCountries.map((country) => ({ ...country }));
-let companies: Company[] = seedCompanies.map((company) => ({ ...company }));
-let emissionFactors: EmissionFactor[] = seedEmissionFactors.map((factor) => ({
+const countries: Country[] = seedCountries.map((country) => ({ ...country }));
+const companies: Company[] = seedCompanies.map((company) => ({ ...company }));
+const emissionFactors: EmissionFactor[] = seedEmissionFactors.map((factor) => ({
   ...factor,
 }));
 let activityRecords: ActivityRecord[] = seedActivityRecords.map((record) => ({
