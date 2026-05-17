@@ -1,7 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { calculateRecordEmission } from "@/lib/carbon";
 import { getActivityTypeLabel, getScopeLabel } from "@/lib/uiText";
@@ -24,6 +24,22 @@ export function ActivityTable() {
   const deleteActivityRecord = useCarbonStore((state) => state.deleteActivityRecord);
   const error = useCarbonStore((state) => state.error);
 
+  const sortedActivityRecords = useMemo(() => {
+    return activityRecords
+      .map((record, index) => ({ record, index }))
+      .sort((left, right) => {
+        const dateDifference =
+          new Date(right.record.date).getTime() - new Date(left.record.date).getTime();
+
+        if (dateDifference !== 0) {
+          return dateDifference;
+        }
+
+        return right.index - left.index;
+      })
+      .map(({ record }) => record);
+  }, [activityRecords]);
+
   async function handleDelete(id: string) {
     setPendingDeleteId(id);
     try {
@@ -43,7 +59,7 @@ export function ActivityTable() {
           </p>
         </div>
         <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-          {activityRecords.length}건
+          {sortedActivityRecords.length}건
         </div>
       </div>
 
@@ -53,7 +69,7 @@ export function ActivityTable() {
         </div>
       ) : null}
 
-      {activityRecords.length === 0 ? (
+      {sortedActivityRecords.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
           표시할 활동 데이터가 없습니다.
         </div>
@@ -99,7 +115,7 @@ export function ActivityTable() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
-                {activityRecords.map((record) => {
+                {sortedActivityRecords.map((record) => {
                   const companyName =
                     companies.find((company) => company.id === record.companyId)?.name ??
                     "알 수 없는 기업";

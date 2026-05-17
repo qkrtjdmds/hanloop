@@ -15,7 +15,6 @@ import type {
 
 const MIN_LATENCY_MS = 200;
 const MAX_LATENCY_MS = 800;
-const WRITE_FAILURE_RATE = 0.15;
 
 const countries: Country[] = seedCountries.map((country) => ({ ...country }));
 const companies: Company[] = seedCompanies.map((company) => ({ ...company }));
@@ -29,12 +28,19 @@ let sustainabilityPosts: SustainabilityPost[] = seedSustainabilityPosts.map((pos
   ...post,
 }));
 
-function getLatencyMs(): number {
-  return Math.floor(Math.random() * (MAX_LATENCY_MS - MIN_LATENCY_MS + 1)) + MIN_LATENCY_MS;
+function generateId(prefix: string): string {
+  if (
+    typeof globalThis.crypto !== "undefined" &&
+    typeof globalThis.crypto.randomUUID === "function"
+  ) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function shouldFailWrite(): boolean {
-  return Math.random() < WRITE_FAILURE_RATE;
+function getLatencyMs(): number {
+  return Math.floor(Math.random() * (MAX_LATENCY_MS - MIN_LATENCY_MS + 1)) + MIN_LATENCY_MS;
 }
 
 function delay(durationMs: number): Promise<void> {
@@ -47,12 +53,8 @@ async function simulateReadLatency(): Promise<void> {
   await delay(getLatencyMs());
 }
 
-async function simulateWriteLatency(errorMessage: string): Promise<void> {
+async function simulateWriteLatency(): Promise<void> {
   await delay(getLatencyMs());
-
-  if (shouldFailWrite()) {
-    throw new Error(errorMessage);
-  }
 }
 
 function cloneCountries(items: Country[]): Country[] {
@@ -103,11 +105,11 @@ export async function fetchSustainabilityPosts(): Promise<SustainabilityPost[]> 
 export async function createOrUpdateActivityRecord(
   record: Omit<ActivityRecord, "id"> & Partial<Pick<ActivityRecord, "id">>,
 ): Promise<ActivityRecord> {
-  await simulateWriteLatency("저장에 실패했습니다");
+  await simulateWriteLatency();
 
   const nextRecord: ActivityRecord = {
     ...record,
-    id: record.id ?? crypto.randomUUID(),
+    id: record.id ?? generateId("activity"),
   };
 
   const existingIndex = activityRecords.findIndex((item) => item.id === nextRecord.id);
@@ -124,18 +126,18 @@ export async function createOrUpdateActivityRecord(
 }
 
 export async function deleteActivityRecord(id: string): Promise<void> {
-  await simulateWriteLatency("삭제에 실패했습니다");
+  await simulateWriteLatency();
   activityRecords = activityRecords.filter((record) => record.id !== id);
 }
 
 export async function createOrUpdateSustainabilityPost(
   post: Omit<SustainabilityPost, "id"> & Partial<Pick<SustainabilityPost, "id">>,
 ): Promise<SustainabilityPost> {
-  await simulateWriteLatency("저장에 실패했습니다");
+  await simulateWriteLatency();
 
   const nextPost: SustainabilityPost = {
     ...post,
-    id: post.id ?? crypto.randomUUID(),
+    id: post.id ?? generateId("post"),
   };
 
   const existingIndex = sustainabilityPosts.findIndex((item) => item.id === nextPost.id);

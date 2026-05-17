@@ -120,9 +120,13 @@ export const useCarbonStore = create<CarbonStoreState>((set, get) => ({
         error: null,
       });
     } catch (error) {
+      console.error("Dashboard data load failed", error);
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : "대시보드 데이터를 불러오지 못했습니다",
+        error:
+          error instanceof Error
+            ? error.message
+            : "대시보드 데이터를 불러오지 못했습니다.",
       });
     }
   },
@@ -162,9 +166,10 @@ export const useCarbonStore = create<CarbonStoreState>((set, get) => ({
 
       return savedRecord;
     } catch (error) {
+      console.error("Activity record save failed", error);
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : "저장에 실패했습니다",
+        error: error instanceof Error ? error.message : "저장 실패",
       });
       return null;
     }
@@ -184,9 +189,10 @@ export const useCarbonStore = create<CarbonStoreState>((set, get) => ({
 
       return true;
     } catch (error) {
+      console.error("Activity record delete failed", error);
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : "삭제에 실패했습니다",
+        error: error instanceof Error ? error.message : "삭제 실패",
       });
       return false;
     }
@@ -219,9 +225,10 @@ export const useCarbonStore = create<CarbonStoreState>((set, get) => ({
 
       return savedPost;
     } catch (error) {
+      console.error("Sustainability post save failed", error);
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : "저장에 실패했습니다",
+        error: error instanceof Error ? error.message : "저장 실패",
       });
       return null;
     }
